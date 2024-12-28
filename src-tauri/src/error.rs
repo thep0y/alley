@@ -1,38 +1,25 @@
-use std::time::SystemTimeError;
-
-use qrcode_generator::QRCodeError;
 use serde::{Serialize, Serializer};
 
+pub type FluxyResult<T> = std::result::Result<T, FluxyError>;
+
 #[derive(Debug, thiserror::Error)]
-pub enum AlleyError {
-    // #[error(transparent)]
-    // SetLogger(#[from] SetLoggerError),
+pub enum FluxyError {
     #[error(transparent)]
-    SystemTime(#[from] SystemTimeError),
+    Tauri(#[from] tauri::Error),
+    #[cfg(desktop)]
     #[error(transparent)]
-    Tauro(#[from] tauri::Error),
-    #[error(transparent)]
-    QRCode(#[from] QRCodeError),
+    Update(#[from] tauri_plugin_updater::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("{0}")]
-    NotMatch(String),
-    #[cfg(target_os = "linux")]
     #[error(transparent)]
-    EnvVar(#[from] std::env::VarError),
-    #[error("Invalid message type: {0}")]
-    InvalidMessageType(u8),
-    #[error("Invalid message type: {0}")]
-    InvalidPairResponse(String),
-    #[error("Listener has initialized")]
-    ListenerInitialized,
+    AddrParse(#[from] std::net::AddrParseError),
     #[error(transparent)]
-    Elapsed(#[from] tokio::time::error::Elapsed),
-    #[error("Remote has refused pair")]
-    PairingRefuse,
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    SystemTime(#[from] std::time::SystemTimeError),
 }
 
-impl Serialize for AlleyError {
+impl Serialize for FluxyError {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -40,5 +27,3 @@ impl Serialize for AlleyError {
         serializer.serialize_str(self.to_string().as_ref())
     }
 }
-
-pub(crate) type AlleyResult<T> = Result<T, AlleyError>;

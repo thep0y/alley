@@ -1,47 +1,28 @@
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onMount } from "solid-js";
 import { BiRegularSun, BiSolidMoon } from "solid-icons/bi";
 import { LazyFlex, LazySwitch, LazyTooltip } from "./lazy";
 import "~/App.scss";
 import useDark from "alley-components/lib/hooks/useDark";
 import RippleEffect from "./components/ripple";
-import { initMulticast } from "./api";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { createStore } from "solid-js/store";
 import { AiFillAndroid } from "solid-icons/ai";
-
-const appWindow = getCurrentWebviewWindow();
+import { showWindow } from "./commands/window";
+import { getPeers } from "./api";
 
 const App = () => {
   const [isDark, setIsDark] = useDark();
 
-  const [remoteAccesses, setRemoteAccesses] = createStore<Remote[]>([]);
-  const [receiveEvent, setReceiveEvent] = createSignal<ReceiveEvent | null>(
-    null,
-  );
+  const [remoteAccesses] = createStore<Remote[]>([]);
+  const [receiveEvent] = createSignal<ReceiveEvent | null>(null);
 
-  onMount(() => {
-    const unlisten = appWindow.listen<ReceiveEvent>(
-      "multicast:receive-event",
-      (e) => {
-        setReceiveEvent(e.payload);
-        console.log(e.payload);
-      },
-    );
-
-    onCleanup(() => {
-      unlisten.then((f) => f());
-    });
-  });
-
-  onMount(() => {
-    const unlisten = appWindow.listen<Remote>("multicast:message", (e) => {
-      setRemoteAccesses(remoteAccesses.length, e.payload);
-    });
-    initMulticast();
-
-    onCleanup(() => {
-      unlisten.then((f) => f());
-    });
+  onMount(async () => {
+    if (import.meta.env.TAURI_ENV_PLATFORM !== "android") {
+      showWindow();
+    }
+    console.log("获取 peers");
+    const peers = await getPeers();
+    console.log("****");
+    console.log(peers);
   });
 
   return (

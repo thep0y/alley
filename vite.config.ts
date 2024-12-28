@@ -1,9 +1,8 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import { internalIpV4 } from "internal-ip";
-import path from "path";
+import path from "node:path";
 
-// @ts-expect-error process is a nodejs global
 const mobile = !!/android|ios/.exec(process.env.TAURI_ENV_PLATFORM);
 
 const pathSrc = path.resolve(__dirname, "src");
@@ -20,6 +19,8 @@ export default defineConfig(async () => ({
     },
     conditions: ["development", "browser"],
   },
+
+  envPrefix: ["TAURI_ENV_PLATFORM"],
 
   plugins: [solid()],
 
