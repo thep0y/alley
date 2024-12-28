@@ -16,26 +16,26 @@
     "build:android": "bun run tauri android build -t aarch64 x86_64 --split-per-abi"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0-rc.4",
-    "@tauri-apps/plugin-barcode-scanner": "^2.0.0-rc.1",
-    "@tauri-apps/plugin-clipboard-manager": "^2.0.0-rc.1",
-    "@tauri-apps/plugin-dialog": "^2.0.0-rc.1",
-    "@tauri-apps/plugin-os": "^2.0.0-rc.1",
-    "@tauri-apps/plugin-shell": "^2.0.0-rc.1",
-    "@tauri-apps/plugin-updater": "^2.0.0-rc.1",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-barcode-scanner": "^2.2.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-os": "^2.2.0",
+    "@tauri-apps/plugin-shell": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.3.0",
     "alley-components": "^0.2.10",
     "solid-icons": "^1.1.0",
-    "solid-js": "^1.8.22"
+    "solid-js": "^1.9.3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0-rc.10",
-    "@types/node": "^20.16.4",
-    "@biomejs/biome": "^1.8.3",
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/node": "^20.17.10",
+    "@biomejs/biome": "^1.9.4",
     "cross-env": "^7.0.3",
     "internal-ip": "^7.0.0",
-    "sass": "^1.78.0",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.3",
-    "vite-plugin-solid": "^2.10.2"
+    "sass": "^1.83.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vite-plugin-solid": "^2.11.0"
   }
 }

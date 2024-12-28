@@ -12,10 +12,10 @@ name = "fluxy_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.0-rc", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0-rc", features = [] }
+tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
@@ -26,11 +26,11 @@ tokio = { version = "1", default-features = false, features = [
 ] }
 tokio-util = "0.7"
 local-ip-address = "0.6"
-qrcode-generator = "4"
+qrcode-generator = "5"
 bytes = '1'
 futures = "0.3"
 time = { version = "0.3", features = ['macros'] }
-thiserror = "1"
+thiserror = "2"
 tracing = { version = "0", features = ["log", "release_max_level_info"] }
 tracing-subscriber = { version = "0", features = [
   'time',
@@ -42,20 +42,20 @@ hostname = "^0.4"
 os_info = { version = "3", default-features = false }
 once_cell = "1"
 sha1 = "0"
-tauri-plugin-os = "2.0.0-rc"
+tauri-plugin-os = "2"
 
 [target."cfg(any(target_os = \"macos\", target_os = \"windows\", target_os = \"linux\"))".dependencies]
 tracing-appender = '0.2'
-tauri-plugin-updater = "2.0.0-rc.0" # 这个插件不支持手机
+tauri-plugin-updater = "2" # 这个插件不支持手机
 
 # 下面三个插件未完成对手机的适配，暂时不编译到手机端
-tauri-plugin-clipboard-manager = "2.0.0-rc.0"
-tauri-plugin-shell = "2.0.0-rc.0"
-tauri-plugin-dialog = "2.0.0-rc.0"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
 
 [target."cfg(target_os = \"android\")".dependencies]
 # file-picker-android = { git = "https://github.com/Berrysoft/file-picker-android" }
-tauri-plugin-barcode-scanner = "2.0.0-rc.0"
+tauri-plugin-barcode-scanner = "2"
 
 [profile.release]
 panic = "abort"
