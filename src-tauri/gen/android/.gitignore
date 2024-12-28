@@ -17,4 +17,3 @@ key.properties
 
 /.tauri
 /tauri.settings.gradle
-/keystore.properties

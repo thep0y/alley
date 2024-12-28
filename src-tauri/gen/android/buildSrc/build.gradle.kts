@@ -19,13 +19,13 @@ repositories {
     maven { url=uri ("https://maven.aliyun.com/repository/central")}
     maven { url=uri ("https://maven.aliyun.com/repository/gradle-plugin")}
     maven { url=uri ("https://maven.aliyun.com/repository/public")}
-
+    
     google()
     mavenCentral()
 }
 
 dependencies {
     compileOnly(gradleApi())
-    implementation("com.android.tools.build:gradle:8.3.0")
+    implementation("com.android.tools.build:gradle:8.5.1")
 }
 
