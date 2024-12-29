@@ -1,11 +1,14 @@
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use tokio::{
     net::UdpSocket,
-    sync::Notify,
+    sync::{Mutex, Notify},
     time::{interval, Duration},
 };
 
@@ -19,9 +22,10 @@ use super::DiscoveryMessage;
 
 pub struct Broadcaster {
     socket: Arc<UdpSocket>,
-    node_id: String,
     hostname: String,
-    shutdown: Arc<Notify>,
+    state: Arc<AppState>,
+    shutdown: Arc<Mutex<Notify>>,
+    is_broadcasting: AtomicBool,
 }
 
 impl Broadcaster {
@@ -45,9 +49,10 @@ impl Broadcaster {
 
         Ok(Self {
             socket,
-            node_id,
+            state,
             hostname,
-            shutdown: Arc::new(Notify::new()), // 默认启动组播
+            shutdown: Arc::new(Mutex::new(Notify::new())),
+            is_broadcasting: AtomicBool::new(false),
         })
     }
 
@@ -61,10 +66,12 @@ impl Broadcaster {
             .as_secs();
 
         let message = DiscoveryMessage::Announce {
-            node_id: self.node_id.clone(),
+            node_id: self.state.get_self_id().to_owned(),
             hostname: self.hostname.clone(),
             timestamp,
-            version: "1.0".to_string(),
+            protocol_version: "1.0".to_string(),
+            server_port: self.state.get_server_port(),
+            os_info: self.state.get_os_info().clone(),
         };
 
         let bytes = serde_json::to_vec(&message).map_err(|e| {
@@ -85,12 +92,18 @@ impl Broadcaster {
     }
 
     pub async fn start_broadcasting(&self) -> FluxyResult<()> {
+        if self.is_broadcasting.swap(true, Ordering::SeqCst) {
+            info!("Broadcasting is already running");
+            return Ok(());
+        }
+
         info!("Starting broadcasting");
         let mut interval = interval(Duration::from_secs(1));
 
         loop {
+            let shutdown = self.shutdown.lock().await;
             tokio::select! {
-                _ = self.shutdown.notified() => {
+                _ = shutdown.notified() => {
                     info!("Received shutdown signal");
                     break;
                 }
@@ -103,12 +116,19 @@ impl Broadcaster {
             }
         }
 
+        self.is_broadcasting.store(false, Ordering::SeqCst);
         info!("Broadcasting stopped");
         Ok(())
     }
 
-    pub fn stop_broadcasting(&self) {
+    pub async fn reset_shutdown(&self) {
+        let mut shutdown = self.shutdown.lock().await;
+        *shutdown = Notify::new();
+    }
+
+    pub async fn stop_broadcasting(&self) {
         info!("Stopping broadcasting");
-        self.shutdown.notify_one();
+        let shutdown = self.shutdown.lock().await;
+        shutdown.notify_one();
     }
 }

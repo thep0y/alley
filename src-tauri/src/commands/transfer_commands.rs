@@ -52,7 +52,7 @@ pub async fn send_file(
 
     let transfer_id = uuid::Uuid::new_v4().to_string();
     let mut stream = client
-        .connect(&peer.addr.to_string())
+        .connect(peer.addr, peer.port)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -88,7 +88,7 @@ pub async fn cancel_transfer(
     };
 
     let mut stream = client
-        .connect(&peer.addr.to_string())
+        .connect(peer.addr, peer.port)
         .await
         .map_err(|e| e.to_string())?;
     client

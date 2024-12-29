@@ -1,29 +1,42 @@
-use super::DiscoveryMessage;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+use tokio::net::UdpSocket;
+use tokio::sync::{Mutex, Notify};
+
+use crate::error::FluxyResult;
 use crate::state::app_state::AppState;
 use crate::state::peer::{PeerInfo, PeerStatus};
-use std::sync::Arc;
-use tokio::net::UdpSocket;
-use tokio::sync::Notify;
+
+use super::DiscoveryMessage;
 
 pub struct Listener {
     socket: Arc<UdpSocket>,
     state: Arc<AppState>,
-    shutdown: Arc<Notify>,
+    shutdown: Arc<Mutex<Notify>>,
+    is_listening: AtomicBool,
 }
 
 impl Listener {
-    pub fn new(socket: Arc<UdpSocket>, state: Arc<AppState>) -> std::io::Result<Self> {
-        Ok(Self {
+    pub fn new(socket: Arc<UdpSocket>, state: Arc<AppState>) -> Self {
+        Self {
             socket,
             state,
-            shutdown: Arc::new(Notify::new()),
-        })
+            shutdown: Arc::new(Mutex::new(Notify::new())),
+            is_listening: AtomicBool::new(false),
+        }
     }
 
-    pub async fn start_listening(&self) -> std::io::Result<()> {
+    pub async fn start_listening(&self) -> FluxyResult<()> {
+        if self.is_listening.swap(true, Ordering::SeqCst) {
+            info!("Listening is already running");
+            return Ok(());
+        }
+
         let mut buf = [0; 1024];
 
         loop {
+            let shutdown = self.shutdown.lock().await;
             tokio::select! {
                 result = self.receive_message(&mut buf) => {
                     if let Err(e) = result {
@@ -31,21 +44,28 @@ impl Listener {
                         return Err(e);
                     }
                 }
-                _ = self.shutdown.notified() => {
+                _ = shutdown.notified() => {
                     info!("Stopping listener");
                     break;
                 }
             }
         }
 
+        self.is_listening.store(false, Ordering::SeqCst);
+        info!("Listening stopped");
         Ok(())
     }
-
-    pub fn stop_listening(&self) {
-        self.shutdown.notify_one();
+    pub async fn reset_shutdown(&self) {
+        let mut shutdown = self.shutdown.lock().await;
+        *shutdown = Notify::new();
     }
 
-    async fn receive_message(&self, buf: &mut [u8]) -> std::io::Result<()> {
+    pub async fn stop_listening(&self) {
+        info!("Stopping listening");
+        let shutdown = self.shutdown.lock().await;
+        shutdown.notify_one();
+    }
+    async fn receive_message(&self, buf: &mut [u8]) -> FluxyResult<()> {
         let (size, addr) = self.socket.recv_from(buf).await?;
         trace!(size = size, addr = ?addr, "Received data from socket");
 
@@ -60,23 +80,35 @@ impl Listener {
         &self,
         message: DiscoveryMessage,
         addr: std::net::SocketAddr,
-    ) -> std::io::Result<()> {
+    ) -> FluxyResult<()> {
         match message {
             DiscoveryMessage::Announce {
                 node_id,
                 hostname,
                 timestamp,
-                version,
+                protocol_version,
+                server_port,
+                os_info,
             } => {
                 if node_id == self.state.get_self_id() {
                     trace!(node_id = ?node_id, "Ignoring Announce message from self");
                     return Ok(());
                 }
 
-                debug!(node_id = ?node_id, hostname = ?hostname, timestamp = timestamp, version = ?version, "Received Announce message");
+                debug!(node_id = node_id, hostname = hostname, server_port = server_port, timestamp = timestamp, version = protocol_version, os_info = ?os_info, "Received Announce message");
 
-                self.update_peer_info(node_id, hostname, addr, timestamp, version)
-                    .await;
+                let peer_info = PeerInfo {
+                    id: node_id,
+                    hostname,
+                    addr: addr.ip(),
+                    port: server_port,
+                    last_seen: timestamp,
+                    protocol_version,
+                    status: PeerStatus::Online,
+                    os_info,
+                };
+
+                self.update_peer_info(peer_info).await;
                 self.state.notify_peer_update().await;
             }
             DiscoveryMessage::Heartbeat { node_id, timestamp } => {
@@ -88,26 +120,11 @@ impl Listener {
         Ok(())
     }
 
-    async fn update_peer_info(
-        &self,
-        node_id: String,
-        hostname: String,
-        addr: std::net::SocketAddr,
-        timestamp: u64,
-        version: String,
-    ) {
+    async fn update_peer_info(&self, peer_info: PeerInfo) {
+        let node_id = peer_info.id.clone();
         let mut peers = self.state.peers.write().await;
-        peers.insert(
-            node_id.clone(),
-            PeerInfo {
-                id: node_id.clone(),
-                hostname,
-                addr,
-                last_seen: timestamp,
-                version,
-                status: PeerStatus::Online,
-            },
-        );
+        peers.insert(node_id.clone(), peer_info);
+
         info!(node_id = ?node_id, "Updated peer info from Announce message");
     }
 

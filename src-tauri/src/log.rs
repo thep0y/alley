@@ -59,7 +59,7 @@ pub fn setup_logging() {
         .with_writer(writer);
 
     if cfg!(any(debug_assertions, mobile)) {
-        builder.with_ansi(cfg!(desktop)).init();
+        builder.with_ansi(true).init();
     } else {
         builder.json().init();
     }

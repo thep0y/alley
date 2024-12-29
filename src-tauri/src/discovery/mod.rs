@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 
-use crate::error::FluxyResult;
+use crate::{error::FluxyResult, os::OsInformation};
 
 pub mod broadcaster;
 pub mod listener;
@@ -13,10 +13,12 @@ pub mod listener;
 pub enum DiscoveryMessage {
     // 节点宣告自己的存在
     Announce {
-        node_id: String,  // 节点唯一标识
-        hostname: String, // 主机名
-        timestamp: u64,   // 发送时间戳
-        version: String,  // 协议版本
+        node_id: String,          // 节点唯一标识
+        hostname: String,         // 主机名
+        timestamp: u64,           // 发送时间戳
+        protocol_version: String, // 协议版本
+        server_port: u16,
+        os_info: OsInformation,
     },
     // 心跳包
     Heartbeat {

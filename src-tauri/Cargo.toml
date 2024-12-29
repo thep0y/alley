@@ -47,8 +47,6 @@ sha1 = "0"
 uuid = { version = "1", default-features = false, features = ["v4"] }
 socket2 = "0"
 
-tauri-plugin-os = "2"
-
 [target."cfg(any(target_os = \"macos\", target_os = \"windows\", target_os = \"linux\"))".dependencies]
 tracing-appender = '0.2'
 tauri-plugin-updater = "2" # 这个插件不支持手机

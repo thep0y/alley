@@ -13,7 +13,6 @@
     "shell:default",
     "clipboard-manager:allow-write-text",
     "shell:allow-open",
-    "dialog:allow-open",
-    "os:allow-platform"
+    "dialog:allow-open"
   ]
 }

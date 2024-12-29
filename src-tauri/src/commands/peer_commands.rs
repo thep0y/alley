@@ -4,22 +4,29 @@ use tauri::State;
 
 use crate::{
     discovery::broadcaster::Broadcaster,
+    error::FluxyResult,
     network::tcp_client::TcpClient,
     state::{app_state::AppState, peer::PeerInfo},
 };
 
 #[tauri::command]
-pub async fn get_peers(state: State<'_, Arc<AppState>>) -> Result<Vec<PeerInfo>, String> {
+pub async fn get_peers(state: State<'_, Arc<AppState>>) -> FluxyResult<Vec<PeerInfo>> {
     let peers = state.peers.read().await;
-    let peers = peers.values().map(|value| value.clone()).collect();
+    let peers = peers.values().cloned().collect();
     Ok(peers)
+}
+
+#[tauri::command]
+pub async fn clear_peers(state: State<'_, Arc<AppState>>) -> FluxyResult<()> {
+    state.clear_peers().await;
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn send_pair_request(
     state: State<'_, Arc<AppState>>,
     target_id: String,
-) -> Result<(), String> {
+) -> FluxyResult<()> {
     let client = TcpClient::new(state.inner().clone());
     let peer = {
         let peers = state.peers.read().await;
@@ -27,7 +34,8 @@ pub async fn send_pair_request(
     };
 
     let mut stream = client
-        .connect(&peer.addr.to_string())
+        .connect(peer.addr, peer.port)
+        // .connect(Ipv4Addr::LOCALHOST.into(), 1231)
         .await
         .map_err(|e| e.to_string())?;
     client
@@ -37,8 +45,7 @@ pub async fn send_pair_request(
 
     state
         .update_pair_status(target_id, crate::state::peer::PairStatus::Requested)
-        .await;
-    Ok(())
+        .await
 }
 
 #[tauri::command]
@@ -46,7 +53,7 @@ pub async fn respond_pair_request(
     state: State<'_, Arc<AppState>>,
     target_id: String,
     accepted: bool,
-) -> Result<(), String> {
+) -> FluxyResult<()> {
     let client = TcpClient::new(state.inner().clone());
     let peer = {
         let peers = state.peers.read().await;
@@ -54,7 +61,7 @@ pub async fn respond_pair_request(
     };
 
     let mut stream = client
-        .connect(&peer.addr.to_string())
+        .connect(peer.addr, peer.port)
         .await
         .map_err(|e| e.to_string())?;
     client
@@ -67,8 +74,7 @@ pub async fn respond_pair_request(
     } else {
         crate::state::peer::PairStatus::Rejected
     };
-    state.update_pair_status(target_id, status).await;
-    Ok(())
+    state.update_pair_status(target_id, status).await
 }
 
 #[tauri::command]
@@ -76,15 +82,13 @@ pub async fn accept_pair_request(
     state: State<'_, Arc<AppState>>,
     broadcaster: State<'_, Arc<Broadcaster>>,
     target_id: String,
-) -> Result<(), String> {
+) -> FluxyResult<()> {
     // 停止组播
-    broadcaster.stop_broadcasting();
+    broadcaster.stop_broadcasting().await;
 
     // 更新配对状态
     state.set_paired(true);
     state
         .update_pair_status(target_id, crate::state::peer::PairStatus::Paired)
-        .await;
-
-    Ok(())
+        .await
 }

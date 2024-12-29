@@ -17,6 +17,10 @@ pub enum FluxyError {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     SystemTime(#[from] std::time::SystemTimeError),
+    #[error(transparent)]
+    TimeoutElapsed(#[from] tokio::time::error::Elapsed),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl Serialize for FluxyError {
@@ -25,5 +29,17 @@ impl Serialize for FluxyError {
         S: Serializer,
     {
         serializer.serialize_str(self.to_string().as_ref())
+    }
+}
+
+impl From<String> for FluxyError {
+    fn from(value: String) -> Self {
+        FluxyError::Other(value)
+    }
+}
+
+impl From<&str> for FluxyError {
+    fn from(value: &str) -> Self {
+        FluxyError::Other(value.to_owned())
     }
 }
