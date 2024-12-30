@@ -7,7 +7,7 @@ use tokio::{
 };
 
 use crate::{
-    network::protocol::{Message, MessageType},
+    network::protocol::{Message, MessageType, TransferRequestType},
     state::{app_state::AppState, transfer::TransferTask},
 };
 
@@ -39,8 +39,10 @@ impl FileSender {
             target_id: target_id.to_string(),
             message_type: MessageType::TransferRequest {
                 transfer_id: transfer_id.to_string(),
-                file_name: file_name.clone(),
-                file_size,
+                transfer_request_type: TransferRequestType::File {
+                    file_name: file_name.clone(),
+                    file_size,
+                },
             },
         };
         transfer_request.write_to(&mut stream).await?;
@@ -83,7 +85,7 @@ impl FileSender {
                 // 更新传输进度
                 let progress = (chunk_index * 1024 * 1024) as f32 / file_size as f32;
                 self.state
-                    .update_transfer_progress(transfer_id, progress)
+                    .update_file_transfer_progress(transfer_id, progress)
                     .await;
             }
 

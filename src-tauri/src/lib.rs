@@ -9,7 +9,9 @@ use crate::commands::discovery::{
 use crate::commands::peer_commands::{
     clear_peers, get_peers, respond_pair_request, send_pair_request,
 };
+use crate::commands::state::get_self_id;
 use crate::commands::tcp::start_server;
+use crate::commands::transfer_commands::send_text;
 use crate::discovery::{broadcaster::Broadcaster, create_socket, listener::Listener};
 use crate::error::FluxyResult;
 use crate::log::setup_logging;
@@ -100,6 +102,7 @@ pub async fn run() {
         .invoke_handler(tauri::generate_handler![
             #[cfg(desktop)]
             show_window,
+            get_self_id,
             get_peers,
             clear_peers,
             send_pair_request,
@@ -108,7 +111,8 @@ pub async fn run() {
             start_broadcasting,
             start_listening,
             stop_broadcasting,
-            stop_listening
+            stop_listening,
+            send_text
         ])
         .run(tauri::generate_context!())
         .map_err(|e| {

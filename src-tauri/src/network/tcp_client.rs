@@ -3,7 +3,7 @@ use std::{io, net::IpAddr, sync::Arc};
 use tokio::{io::AsyncReadExt, net::TcpStream};
 
 use crate::{
-    network::protocol::{Message, MessageType},
+    network::protocol::{Message, MessageType, TransferRequestType},
     state::app_state::AppState,
 };
 
@@ -113,8 +113,10 @@ impl TcpClient {
             target_id: target_id.to_string(),
             message_type: MessageType::TransferRequest {
                 transfer_id: transfer_id.to_string(),
-                file_name: path.to_string(),
-                file_size: total_size,
+                transfer_request_type: TransferRequestType::File {
+                    file_name: path.to_string(),
+                    file_size: total_size,
+                },
             },
         };
         message.write_to(stream).await.map_err(|e| {

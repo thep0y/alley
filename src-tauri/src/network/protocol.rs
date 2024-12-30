@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TransferRequestType {
+    Text { content: String },
+    File { file_name: String, file_size: u64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MessageType {
     // 配对相关消息
     PairRequest {
@@ -17,8 +23,7 @@ pub enum MessageType {
     // 其他消息类型保持不变...
     TransferRequest {
         transfer_id: String,
-        file_name: String,
-        file_size: u64,
+        transfer_request_type: TransferRequestType,
     },
     TransferAccept {
         transfer_id: String,

@@ -1,4 +1,3 @@
-use std::io;
 use std::net::Ipv4Addr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -13,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::error::FluxyResult;
+use crate::network::protocol::TransferRequestType;
 use crate::state::{
     app_state::AppState,
     peer::PairStatus,
@@ -61,7 +61,7 @@ impl TcpServer {
         })
     }
 
-    pub async fn start(&mut self) -> io::Result<()> {
+    pub async fn start(&mut self) -> FluxyResult<()> {
         info!(
             addr = ?self.listener.local_addr()?,
             "TCP server starting up"
@@ -145,7 +145,7 @@ impl TcpServer {
         mut stream: TcpStream,
         state: Arc<AppState>,
         cancel_token: CancellationToken,
-    ) -> io::Result<()> {
+    ) -> FluxyResult<()> {
         let peer_addr = stream.peer_addr()?;
         debug!(peer_addr = ?peer_addr, "Starting connection handler");
 
@@ -158,7 +158,7 @@ impl TcpServer {
                         Ok(Some(message)) => {
                             trace!(
                                 message_type = ?message.message_type,
-                                source_id = ?message.source_id,
+                                source_id = message.source_id,
                                 "Received message"
                             );
 
@@ -166,19 +166,19 @@ impl TcpServer {
                                 error!(
                                     error = ?e,
                                     message_type = ?message.message_type,
-                                    source_id = ?message.source_id,
+                                    source_id = message.source_id,
                                     "Message handling failed"
                                 );
                             }
                         }
                         Ok(None) => {
-                            debug!(peer_addr = ?peer_addr, "Connection closed by peer");
+                            debug!(peer_addr = %peer_addr, "Connection closed by peer");
                             break;
                         }
                         Err(e) => {
                             error!(
                                 error = ?e,
-                                peer_addr = ?peer_addr,
+                                peer_addr = %peer_addr,
                                 "Failed to read message from stream"
                             );
                             break;
@@ -186,12 +186,12 @@ impl TcpServer {
                     }
                 }
                 _ = cancel_token.cancelled() => {
-                    info!(peer_addr = ?peer_addr, "Gracefully shutting down connection");
+                    info!(peer_addr = %peer_addr, "Gracefully shutting down connection");
                     // 收到取消信号，优雅地关闭连接
                     if let Err(e) = writer.shutdown().await {
                         warn!(
                             error = ?e,
-                            peer_addr = ?peer_addr,
+                            peer_addr = %peer_addr,
                             "Error during connection shutdown"
                         );
                     }
@@ -202,10 +202,10 @@ impl TcpServer {
         Ok(())
     }
 
-    async fn handle_message(message: &Message, state: Arc<AppState>) -> io::Result<()> {
+    async fn handle_message(message: &Message, state: Arc<AppState>) -> FluxyResult<()> {
         trace!(
             message_type = ?message.message_type,
-            source_id = ?message.source_id,
+            source_id = message.source_id,
             "Processing message"
         );
 
@@ -216,21 +216,32 @@ impl TcpServer {
             }
             MessageType::TransferRequest {
                 transfer_id,
-                file_name,
-                file_size,
-            } => {
-                Self::handle_transfer_request(message, transfer_id, file_name, *file_size, state)
-                    .await
-            }
+                transfer_request_type,
+            } => match transfer_request_type {
+                TransferRequestType::File {
+                    file_name,
+                    file_size,
+                } => {
+                    Self::handle_transfer_file(message, transfer_id, file_name, *file_size, state)
+                        .await
+                }
+                TransferRequestType::Text { content } => {
+                    Self::handle_transfer_text(message, transfer_id, content, state).await
+                }
+            },
             MessageType::FileData {
                 transfer_id,
                 chunk_index,
                 data,
             } => Self::handle_file_data(transfer_id, *chunk_index, data, state).await,
+            MessageType::TextMessage {
+                transfer_id,
+                content,
+            } => Self::handle_text_message(transfer_id, content, state).await,
             _ => {
                 debug!(
                     message_type = ?message.message_type,
-                    source_id = ?message.source_id,
+                    source_id = message.source_id,
                     "Received unhandled message type"
                 );
                 Ok(())
@@ -238,7 +249,7 @@ impl TcpServer {
         }
     }
 
-    async fn handle_pair_request(message: &Message, state: Arc<AppState>) -> io::Result<()> {
+    async fn handle_pair_request(message: &Message, state: Arc<AppState>) -> FluxyResult<()> {
         debug!(
             source_id = ?message.source_id,
             "Processing pair request"
@@ -246,7 +257,7 @@ impl TcpServer {
 
         state
             .update_pair_status(message.source_id.clone(), PairStatus::RequestReceived)
-            .await;
+            .await?;
 
         if let Err(e) = state
             .app_handle
@@ -270,7 +281,7 @@ impl TcpServer {
         message: &Message,
         accepted: bool,
         state: Arc<AppState>,
-    ) -> io::Result<()> {
+    ) -> FluxyResult<()> {
         debug!(
             source_id = ?message.source_id,
             accepted = accepted,
@@ -285,7 +296,7 @@ impl TcpServer {
 
         state
             .update_pair_status(message.source_id.clone(), status.clone())
-            .await;
+            .await?;
 
         info!(
             source_id = ?message.source_id,
@@ -296,19 +307,51 @@ impl TcpServer {
         Ok(())
     }
 
-    async fn handle_transfer_request(
+    async fn handle_transfer_text(
+        message: &Message,
+        transfer_id: &str,
+        content: &str,
+        state: Arc<AppState>,
+    ) -> FluxyResult<()> {
+        debug!(
+            source_id = ?message.source_id,
+            transfer_id = transfer_id,
+            content = content,
+            "Processing text transfer request"
+        );
+
+        let task = TransferTask {
+            id: Uuid::new_v4().to_string(),
+            peer_id: message.source_id.clone(),
+            transfer_type: TransferType::Text {
+                content: content.to_string(),
+            },
+        };
+
+        state.create_transfer(task.clone()).await?;
+
+        info!(
+            transfer_id = ?transfer_id,
+            source_id = ?message.source_id,
+            task_id = ?task.id,
+            "Transfer request processed successfully"
+        );
+        Ok(())
+    }
+
+    async fn handle_transfer_file(
         message: &Message,
         transfer_id: &str,
         file_name: &str,
         file_size: u64,
         state: Arc<AppState>,
-    ) -> io::Result<()> {
+    ) -> FluxyResult<()> {
         debug!(
             source_id = ?message.source_id,
             transfer_id = transfer_id,
             file_name = file_name,
             file_size = file_size,
-            "Processing transfer request"
+            "Processing file transfer request"
         );
 
         let task = TransferTask {
@@ -316,14 +359,14 @@ impl TcpServer {
             peer_id: message.source_id.clone(),
             transfer_type: TransferType::File {
                 path: file_name.to_string(),
+                name: file_name.to_string(),
+                size: file_size,
+                progress: 0.0,
+                status: TransferStatus::Pending,
             },
-            name: file_name.to_string(),
-            size: file_size,
-            progress: 0.0,
-            status: TransferStatus::Pending,
         };
 
-        state.create_transfer(task.clone()).await;
+        state.create_transfer(task.clone()).await?;
 
         info!(
             transfer_id = ?transfer_id,
@@ -341,7 +384,7 @@ impl TcpServer {
         chunk_index: u32,
         data: &[u8],
         state: Arc<AppState>,
-    ) -> io::Result<()> {
+    ) -> FluxyResult<()> {
         trace!(
             transfer_id = transfer_id,
             chunk_index = chunk_index,
@@ -350,18 +393,20 @@ impl TcpServer {
         );
 
         if let Some(task) = state.transfers.write().await.get_mut(transfer_id) {
-            let old_progress = task.progress;
-            task.progress = (chunk_index as f32 * 1024.0) / task.size as f32;
+            if let &TransferType::File { progress, size, .. } = &task.transfer_type {
+                let new_progress = (chunk_index as f32 * 1024.0) / size as f32;
+                task.transfer_type.update_progress(new_progress);
 
-            debug!(
-                transfer_id = transfer_id,
-                chunk_index = chunk_index,
-                old_progress = old_progress,
-                new_progress = task.progress,
-                "Updating transfer progress"
-            );
+                debug!(
+                    transfer_id = transfer_id,
+                    chunk_index = chunk_index,
+                    old_progress = progress,
+                    new_progress = new_progress,
+                    "Updating transfer progress"
+                );
 
-            state.notify_transfer_update(transfer_id).await;
+                state.notify_transfer_update(transfer_id).await?;
+            };
 
             // 处理文件数据...
         } else {
@@ -370,6 +415,30 @@ impl TcpServer {
                 "Received file data for unknown transfer"
             );
         }
+        Ok(())
+    }
+
+    async fn handle_text_message(
+        transfer_id: &str,
+        content: &str,
+        state: Arc<AppState>,
+    ) -> FluxyResult<()> {
+        trace!(
+            transfer_id = transfer_id,
+            content = content,
+            "Processing text message"
+        );
+
+        state.notify_transfer_update(transfer_id).await?;
+
+        // if let Some(task) = state.transfers.write().await.get_mut(transfer_id) {
+        //     state.notify_transfer_update(transfer_id).await?;
+        // } else {
+        //     warn!(
+        //         transfer_id = transfer_id,
+        //         "Received text message for unknown transfer"
+        //     );
+        // }
         Ok(())
     }
 }

@@ -15,9 +15,8 @@
     "windows": [
       {
         "title": "小路速传",
-        "width": 400,
-        "height": 600,
-        "resizable": false
+        "width": 980,
+        "height": 600
       }
     ]
   },

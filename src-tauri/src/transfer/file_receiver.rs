@@ -8,7 +8,7 @@ use tokio::{
 
 use crate::{
     network::protocol::{Message, MessageType},
-    state::{app_state::AppState, transfer::TransferTask},
+    state::app_state::AppState,
 };
 
 pub struct FileReceiver {

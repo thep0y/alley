@@ -172,6 +172,7 @@ impl AppState {
         let mut transfers = self.transfers.write().await;
         transfers.insert(task_id.clone(), task);
         debug!(task_id = %task_id, "Transfer task created successfully");
+        drop(transfers);
 
         self.notify_transfer_update(&task_id).await?;
         Ok(task_id)
@@ -186,7 +187,7 @@ impl AppState {
         let mut transfers = self.transfers.write().await;
 
         if let Some(task) = transfers.get_mut(task_id) {
-            task.status = status;
+            task.transfer_type.update_status(status);
             debug!(task_id = %task_id, "Transfer status updated successfully");
             self.notify_transfer_update(task_id).await?;
             Ok(())
@@ -197,12 +198,16 @@ impl AppState {
         }
     }
 
-    pub async fn update_transfer_progress(&self, task_id: &str, progress: f32) -> FluxyResult<()> {
+    pub async fn update_file_transfer_progress(
+        &self,
+        task_id: &str,
+        progress: f32,
+    ) -> FluxyResult<()> {
         trace!(task_id = %task_id, progress = %progress, "Updating transfer progress");
         let mut transfers = self.transfers.write().await;
 
         if let Some(task) = transfers.get_mut(task_id) {
-            task.progress = progress;
+            task.transfer_type.update_progress(progress);
             trace!(task_id = %task_id, "Transfer progress updated successfully");
             self.notify_transfer_update(task_id).await?;
             Ok(())
